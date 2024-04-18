@@ -26,7 +26,7 @@ generate_template = """Now the student received your questions and answered them
                 Now you will generate a learning path for the student based on his preferences. 
                 
                 RULES:
-                 - Make sure vscode-webview://0g37j4kmiv195hl5au9kfbq0c4k0a0gsnkt2qbv0l4bnlmq54461/workspace/70acbc32-dd6e-4daf-81a9-452514d765be/request/27908144-eba44893-29fb-4f62-90fa-a169c6544ef6the learning path fits the student's preferred time window. 
+                 - Make sure the learning path fits the student's preferred time window. 
                  - Make sure the learning path is clear and easy to follow. 
                  - You can use bullet points to make it more readable.\n
                  - Make sure the learning resources links work and relevant to the student's preferences.\n
