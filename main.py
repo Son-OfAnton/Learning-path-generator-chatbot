@@ -1,12 +1,22 @@
 import secrets
 from collections import defaultdict
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from langchain.prompts import ChatPromptTemplate
 from model import create_llm
 from templates import greeting_prompt, detail_template, generate_template
 from database import get_learning_paths_collection
 
 app = FastAPI()
+
+origins = ["http://localhost:3000", "http://localhost:3001"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 learning_paths_collection = get_learning_paths_collection()
 session_store = defaultdict(lambda: dict())
@@ -65,7 +75,8 @@ async def greet(request: Request):
         session_store[user_id]["chat_history"].append(greeting_response)
         return {"isSuccess": True, "aiResponse": greeting_response}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail={
+                            "isSuccess": False, "error": str(e)})
 
 
 @app.post("/detail")
@@ -85,7 +96,8 @@ async def detail(request: Request):
         session_store[user_id]["chat_history"].append(response)
         return {"isSuccess": True, "aiResponse": response}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail={
+                            "isSuccess": False, "error": str(e)})
 
 
 @app.post("/generate")
@@ -105,7 +117,8 @@ async def generate(request: Request):
         session_store[user_id]["chat_history"].append(response)
         return {"isSuccess": True, "aiResponse": response}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail={
+                            "isSuccess": False, "error": str(e)})
 
 
 @app.post("/save")
@@ -162,7 +175,8 @@ async def save_last_response(request: Request):
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail={
+                            "isSuccess": False, "error": str(e)})
 
 
 @app.get("/learning-paths/{student_id}")
@@ -178,7 +192,8 @@ async def get_learning_paths(student_id: str):
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail={
+                            "isSuccess": False, "error": str(e)})
 
 
 @app.get("/learning-paths/{student_id}/{learning_path_id}")
@@ -198,7 +213,8 @@ async def get_learning_path(student_id: str, learning_path_id: str):
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail={
+                            "isSuccess": False, "error": str(e)})
 
 
 @app.delete("/learning-paths/{student_id}/{learning_path_id}")
@@ -219,4 +235,5 @@ async def delete_learning_path(learning_path_id: str, student_id: str):
                                              "$set": {"learningPaths": updated_paths}})
         return {"isSuccess": True, "aiResponse": "Learning path deleted!"}
     except HTTPException as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail={
+                            "isSuccess": False, "error": str(e)})
