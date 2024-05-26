@@ -70,7 +70,7 @@ async def greet(request: Request):
     try:
         body = await request.json()
         user_id = body.get('studentId')
-        llm = get_llm_memory(user_id)["llm"]
+        llm, _ = get_llm_memory(user_id)["llm"]
         greeting_response = llm.predict(input=greeting_prompt)
         session_store[user_id]["chat_history"].append(greeting_response)
         return {"isSuccess": True, "aiResponse": greeting_response}
@@ -85,10 +85,10 @@ async def detail(request: Request):
     try:
         body = await request.json()
         user_id = body.get('studentId')
-        student_prompt = body.get('topic')
+        student_prompt = body.get('studentResponse')
         session_store[user_id]["chat_history"].append(student_prompt)
 
-        llm = get_llm_memory(user_id)["llm"]
+        llm, _ = get_llm_memory(user_id)["llm"]
         prompt_template = ChatPromptTemplate.from_template(detail_template)
         cooked_prompt = prompt_template.format_messages(
             student_prompt=student_prompt)
@@ -106,10 +106,10 @@ async def generate(request: Request):
     try:
         body = await request.json()
         user_id = body.get('studentId')
-        student_answers = body.get('studentAnswers')
+        student_answers = body.get('studentResponse')
         session_store[user_id]["chat_history"].append(student_answers)
 
-        llm = get_llm_memory(user_id)["llm"]
+        llm, _ = get_llm_memory(user_id)["llm"]
         prompt_template = ChatPromptTemplate.from_template(generate_template)
         cooked_prompt = prompt_template.format_messages(
             student_answers=student_answers)
@@ -145,17 +145,10 @@ async def save_last_response(request: Request):
             {"studentId": user_id})
 
         if user_record:
-            updated = False
-            for path in user_record["learningPaths"]:
-                if path["learningPathTitle"] == learning_path_title:
-                    path["content"].append(last_response)
-                    updated = True
-                    break
-            if not updated:
-                user_record["learningPaths"].append({
+            user_record["learningPaths"].append({
                     "learningPathId": learning_path_id,
                     "learningPathTitle": learning_path_title,
-                    "content": [last_response]
+                    "content": last_response
                 })
             learning_paths_collection.update_one(
                 {"studentId": user_id}, {"$set": user_record})
@@ -179,14 +172,16 @@ async def save_last_response(request: Request):
                             "isSuccess": False, "error": str(e)})
 
 
-@app.get("/learning-paths/{student_id}")
-async def get_learning_paths(student_id: str):
+@app.get("/learning-paths")
+async def get_learning_paths(request: Request):
     """Retrieve all learning paths for a given user."""
     try:
+        body = await request.json()
+        student_id = body.get("studentId")
         user_record = learning_paths_collection.find_one(
             {"studentId": student_id})
         if not user_record:
-            raise HTTPException(status_code=404, detail="User not found")
+            return {"isSuccess": True, "learningPaths": []}
         learning_paths = user_record.get("learningPaths", [])
         return {"isSuccess": True, "learningPaths": learning_paths}
     except HTTPException as e:
@@ -196,10 +191,12 @@ async def get_learning_paths(student_id: str):
                             "isSuccess": False, "error": str(e)})
 
 
-@app.get("/learning-paths/{student_id}/{learning_path_id}")
-async def get_learning_path(student_id: str, learning_path_id: str):
+@app.get("/learning-paths/{learning_path_id}")
+async def get_learning_path(learning_path_id: str, request: Request):
     """Retrieve a specific learning path for a given user."""
     try:
+        body = await request.json()
+        student_id = body.get("studentId")
         user_record = learning_paths_collection.find_one(
             {"studentId": student_id})
         if not user_record:
@@ -217,9 +214,11 @@ async def get_learning_path(student_id: str, learning_path_id: str):
                             "isSuccess": False, "error": str(e)})
 
 
-@app.delete("/learning-paths/{student_id}/{learning_path_id}")
-async def delete_learning_path(learning_path_id: str, student_id: str):
+@app.delete("/learning-path/{learning_path_id}")
+async def delete_learning_path(learning_path_id: str, request: Request):
     try:
+        body = await request.json()
+        student_id = body.get("studentId")
         user_record = learning_paths_collection.find_one(
             {"studentId": student_id})
         if not user_record:
