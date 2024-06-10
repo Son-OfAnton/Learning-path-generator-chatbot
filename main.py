@@ -145,6 +145,10 @@ async def save_last_response(request: Request):
             {"studentId": user_id})
 
         if user_record:
+            old_chat_history = user_record.get("chatHistory", [])
+            old_chat_history.extend(chat_history)
+            user_record["chatHistory"] = old_chat_history
+            session_store[user_id]["chat_history"] = []
             user_record["learningPaths"].append({
                     "learningPathId": learning_path_id,
                     "learningPathTitle": learning_path_title,
@@ -155,6 +159,7 @@ async def save_last_response(request: Request):
         else:
             learning_paths_collection.insert_one({
                 "studentId": user_id,
+                "chatHistory": chat_history,
                 "learningPaths": [
                     {
                         "learningPathId": learning_path_id,
@@ -163,8 +168,28 @@ async def save_last_response(request: Request):
                     }
                 ]
             })
+            session_store[user_id]["chat_history"] = []
 
         return {"isSuccess": True, "aiResponse": "Your learning path is saved, Be sure to follow it!"}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={
+                            "isSuccess": False, "error": str(e)})
+
+
+@app.get("/chat-history")
+async def get_chat_history(request: Request):
+    """Retrieve the chat history for a given user."""
+    try:
+        body = await request.json()
+        student_id = body.get("studentId")
+        user_record = learning_paths_collection.find_one(
+            {"studentId": student_id})
+        if not user_record:
+            return {"isSuccess": True, "chatHistory": []}
+        chat_history = user_record.get("chatHistory", [])
+        return {"isSuccess": True, "chatHistory": chat_history}
     except HTTPException as e:
         raise e
     except Exception as e:
