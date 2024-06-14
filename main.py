@@ -1,6 +1,6 @@
 import secrets
 from collections import defaultdict
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from langchain.prompts import ChatPromptTemplate
 from model import create_llm
@@ -30,7 +30,7 @@ def get_llm_memory(user_id: str):
     return session_store[user_id]
 
 
-@app.get("/alive")
+@app.post("/alive")
 def health_check():
     return {"isSuccess": True, "aiResponse": "Stayin' Alive oh oh oh!"}
 
@@ -48,7 +48,7 @@ async def restart(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/dump")
+@app.post("/dump")
 async def dump_chat_history(request: Request):
     """Dump the chat history of the session for a given user."""
     try:
@@ -127,6 +127,7 @@ async def save_last_response(request: Request):
     try:
         body = await request.json()
         user_id = body.get('studentId')
+        deadline = body.get('deadline')
         learning_path_title = body.get('learningPathTitle')
 
         if user_id not in session_store:
@@ -150,10 +151,12 @@ async def save_last_response(request: Request):
             user_record["chatHistory"] = old_chat_history
             session_store[user_id]["chat_history"] = []
             user_record["learningPaths"].append({
-                    "learningPathId": learning_path_id,
-                    "learningPathTitle": learning_path_title,
-                    "content": last_response
-                })
+                "learningPathId": learning_path_id,
+                "learningPathTitle": learning_path_title,
+                "deadline": deadline,
+                "isCompleted": False,
+                "content": last_response
+            })
             learning_paths_collection.update_one(
                 {"studentId": user_id}, {"$set": user_record})
         else:
@@ -164,6 +167,8 @@ async def save_last_response(request: Request):
                     {
                         "learningPathId": learning_path_id,
                         "learningPathTitle": learning_path_title,
+                        "deadline": deadline,
+                        "isCompleted": False,
                         "content": last_response
                     }
                 ]
@@ -179,11 +184,9 @@ async def save_last_response(request: Request):
 
 
 @app.get("/chat-history")
-async def get_chat_history(request: Request):
+async def get_chat_history(student_id: str = Query(..., alias="studentId")):
     """Retrieve the chat history for a given user."""
     try:
-        body = await request.json()
-        student_id = body.get("studentId")
         user_record = learning_paths_collection.find_one(
             {"studentId": student_id})
         if not user_record:
@@ -198,11 +201,9 @@ async def get_chat_history(request: Request):
 
 
 @app.get("/learning-paths")
-async def get_learning_paths(request: Request):
+async def get_learning_paths(student_id: str = Query(..., alias="studentId")):
     """Retrieve all learning paths for a given user."""
     try:
-        body = await request.json()
-        student_id = body.get("studentId")
         user_record = learning_paths_collection.find_one(
             {"studentId": student_id})
         if not user_record:
@@ -217,11 +218,9 @@ async def get_learning_paths(request: Request):
 
 
 @app.get("/learning-paths/{learning_path_id}")
-async def get_learning_path(learning_path_id: str, request: Request):
+async def get_learning_path(learning_path_id: str, student_id: str = Query(..., alias="studentId")):
     """Retrieve a specific learning path for a given user."""
     try:
-        body = await request.json()
-        student_id = body.get("studentId")
         user_record = learning_paths_collection.find_one(
             {"studentId": student_id})
         if not user_record:
@@ -237,6 +236,30 @@ async def get_learning_path(learning_path_id: str, request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail={
                             "isSuccess": False, "error": str(e)})
+
+
+@app.put("/learning-paths/{learning_path_id}")
+async def make_learning_path_completed(learning_path_id: str, request: Request):
+    """Mark a specific learning path as completed for a given user."""
+    try:
+        body = await request.json()
+        student_id = body.get("studentId")
+        user_record = learning_paths_collection.find_one(
+            {"studentId": student_id})
+        if not user_record:
+            raise HTTPException(
+                status_code=404, detail="User session not found")
+
+        for path in user_record.get("learningPaths", []):
+            if path["learningPathId"] == learning_path_id:
+                path["isCompleted"] = True
+                learning_paths_collection.update_one({"studentId": student_id}, {
+                                                     "$set": {"learningPaths": user_record.get("learningPaths")}})
+                return {"isSuccess": True, "aiResponse": "Learning path marked as completed!"}
+        raise HTTPException(status_code=404)
+    except HTTPException as e:
+        raise HTTPException(status_code=500, detail={
+                            "isSuccess": False, "error": "Learning path not found"})
 
 
 @app.delete("/learning-path/{learning_path_id}")
